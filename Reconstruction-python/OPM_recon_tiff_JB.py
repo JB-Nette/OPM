@@ -18,11 +18,17 @@ import sys
 import getopt
 import re
 import skimage.io as io
+from tifffile import imsave
+import os
+
 
 from skimage.measure import block_reduce
 import time
 from numba import njit, prange
 
+def write_tiff(output_path, filename, deskewed):
+    print('Save deskewed data', output_path + '/' + filename)
+    return imsave(output_path + '/' + filename, deskewed)
 
 # perform OPM reconstruction using orthogonal interpolation
 # http://numba.pydata.org/numba-doc/latest/user/parallel.html#numba-parallel
@@ -102,9 +108,9 @@ def stage_deskew(data, parameters):
                     dz_after = virtual_pos_after - pos_after
 
                     # compute final image plane using orthogonal interpolation
-                    output[z, y, :] = (l_before * dz_after * data[plane_after, pos_after + 1, :] + \
-                                       l_before * (1 - dz_after) * data[plane_after, pos_after, :] + \
-                                       l_after * dz_before * data[plane_before, pos_before + 1, :] + \
+                    output[z, y, :] = (l_before * dz_after * data[plane_after, pos_after + 1, :] +
+                                       l_before * (1 - dz_after) * data[plane_after, pos_after, :] +
+                                       l_after * dz_before * data[plane_before, pos_before + 1, :] +
                                        l_after * (1 - dz_before) * data[plane_before, pos_before, :]) / pixel_step
     # return output
     return output
@@ -145,13 +151,14 @@ def main(argv):
     sub_dirs = natsorted(sub_dirs, alg=ns.PATH)
 
     # TO DO: automatically determine number of channels and tile positions
-    num_channels = 1
-    num_tiles = 2
+    # I think we don't need this one because we are not saving in .Hdf5 file
+    # num_channels = 1
+    # num_tiles = 2
     # one folder is 1 tile of y scan -> ch0_y0, ch0_y1
 
     # create parameter array
     # [theta, stage move distance, camera pixel size]
-    # distance:step distance
+    # distance: step distance -JB
     # units are [degrees,nm,nm]
     params = np.array([29, 200, 122], dtype=np.float32)
 
@@ -166,96 +173,52 @@ def main(argv):
     # output_path = output_dir_path / 'deskewed_10002.h5'
     # bdv_writer = npy2bdv.BdvWriter(str(output_path), nchannels=num_channels, ntiles=num_tiles,
     # subsamp=((1,1,1),),blockdim=((4, 256, 256),))
+    # I dont' think we need this too -JB
 
+    # I made a huge modification from this part -JB
+    # We need to know the number of channels and z position and y position because the total number of sub folders relate to channel*z_num*y_num -JB
+    # We can do it as user input or auto by changing the folder name (like what we do in Confocal system) - JB
     # loop over each directory. Each directory will be placed as a "tile" into the BigStitcher file
+
     for sub_dir in sub_dirs:
 
-        # determine the channel this directory corresponds to
-        m = re.search('ch(\d+)', str(sub_dir), re.IGNORECASE)
-        channel_id = int(m.group(1))
+        print("Now processing ", str(sub_dir))
 
-        if channel_id == 0:
-
-            # determine the experimental tile this directory corresponds to
-            m = re.search('y(\d+)', str(sub_dir), re.IGNORECASE)
-            tile_id = int(m.group(1))
-
-            # output metadata information to console
-            print('Channel ID: ' + str(channel_id) + '; Experimental tile ID: ' + str(tile_id))
-
-            # find all individual tif files in the current channel + tile sub directory and sort
-            files = natsorted(sub_dir.glob('*.tif'), alg=ns.PATH)
-            # files.reverse()
-            stack = np.asarray([io.imread(str(file)) for file in files], dtype=np.float32)
-            print('Deskew data.')
-            # read in data
-            if len(files) == 1:
-                stack = stack[0, :, :, :]
-
-            deskewed = JB_before_deskew(subdir=sub_dir, data_in_folder=stack, parameters=params)
-
-            # run deskew
-            # file = 'Y:/lightsheet stuff/20210406 Deskew of dot pattern_argolight/ch0_y0/ch0_y1.tif'
-            # stack = np.asarray(io.imread(file), dtype=np.float32)
-            # deskewed = stage_deskew(data=stack,parameters=params)
-
-            del stack
-            print("lisa")
-            print('Writing deskewed data.')
-            # write BDV tile
-            # https://github.com/nvladimus/npy2bdv
-            print("lisa tile", tile_id)
-            print("lisa channel", channel_id)
+        # find all individual tif files in the current channel + tile sub directory and sort + deskew each file in sub directory
+        JB_before_deskew(sub_dir=sub_dir, parameters=params, output_dir=output_dir_string)
 
 
-def JB_before_deskew(subdir, data_in_folder, parameters):
-    # check if we have more than 1 tiff file in 1 folder
-    num_tiff_in_dir = len(natsorted(subdir.glob('*.tif'), alg=ns.PATH))
-    print("wtf", num_tiff_in_dir)
-    params = parameters
-    num_channels = 1
-    num_tiles = 1
-    channel_id = 0
-    tile_id = 0
-    output_dir_string = 'Y:/lightsheet stuff/20210406 Deskew of dot pattern_argolight'
-    output_dir_path = Path(output_dir_string)
-    output_path = output_dir_path / 'deskewed_100000.h5'
-    bdv_writer = npy2bdv.BdvWriter(str(output_path), nchannels=num_channels, ntiles=num_tiles,
-                                   subsamp=((1, 1, 1),), blockdim=((4, 256, 256),))
-    print(num_tiff_in_dir)
-    if num_tiff_in_dir > 1:
-        [num_tiff, num_image, nx, ny] = data_in_folder.shape
-        for data in data_in_folder:
-            deskewed = stage_deskew(data, parameters)
-            bdv_writer.append_view(deskewed, time=0, channel=channel_id, tile=tile_id,
-                                   voxel_size_xyz=(
-                                   params[2] / 1000, params[2] * np.cos(params[0] * (np.pi / 180.)) / 1000,
-                                   params[1] * np.sin(params[0] * (np.pi / 180.)) / 1000), voxel_units='um')
-            # free up memory
-            del deskewed
-            gc.collect()
 
-            # write BDV xml file
-            # https://github.com/nvladimus/npy2bdv
-        bdv_writer.write_xml_file(ntimes=1)
-        bdv_writer.close()
 
-        # clean up memory
-        gc.collect()
-    if num_tiff_in_dir == 1:
-        deskewed = stage_deskew(data_in_folder, parameters)
-        bdv_writer.append_view(deskewed, time=0, channel=channel_id, tile=tile_id,
-                               voxel_size_xyz=(params[2] / 1000, params[2] * np.cos(params[0] * (np.pi / 180.)) / 1000,
-                                               params[1] * np.sin(params[0] * (np.pi / 180.)) / 1000), voxel_units='um')
-        # free up memory
+def JB_before_deskew(sub_dir, parameters, output_dir):
+
+    files = natsorted(sub_dir.glob('*.tif'), alg=ns.PATH)
+    print('Deskewing data...')
+
+    if len(files) == 1:
+        stack = stack[0, :, :, :]
+        deskewed = stage_deskew(stack, parameters)
+        write_tiff(output_path = output_dir, filename=file_str[-1], deskewed=deskewed)
+
+        #free up memmory
         del deskewed
         gc.collect()
 
-        # write BDV xml file
-        # https://github.com/nvladimus/npy2bdv
-    bdv_writer.write_xml_file(ntimes=1)
-    bdv_writer.close()
 
+    # check if we have more than 1 tiff file in 1 folder
+    num_tiff_in_dir = len(files)
+    print("number of tiff file in sub directory", num_tiff_in_dir)
+
+    if num_tiff_in_dir > 1:
+         for file in files:
+            stack = np.asarray(io.imread(str(file)), dtype=np.float32)
+            [num_image, nx, ny] = stack.shape
+            deskewed = stage_deskew(stack, parameters)
+            file_str = str(file).split("\\")
+            write_tiff(output_path = output_dir, filename=file_str[-1], deskewed=deskewed)
+
+            del deskewed
+            gc.collect()
 
 # run
 if __name__ == "__main__":
