@@ -112,8 +112,8 @@ def stage_deskew(data,parameters):
 def main(argv):
 
     # parse directory name from command line argument 
-    input_dir_string = ''
-    output_dir_string = ''
+    input_dir_string = 'Y:/lightsheet stuff/20210406 Deskew of dot pattern_argolight/'
+    output_dir_string = 'Y:/lightsheet stuff/20210406 Deskew of dot pattern_argolight/'
 
     try:
         arguments, values = getopt.getopt(argv,"hi:o:n:c:",["help","ipath=","opath="])
@@ -149,7 +149,7 @@ def main(argv):
 
     # TO DO: automatically determine number of channels and tile positions
     num_channels=1
-    num_tiles=69
+    num_tiles=201
 
     # create parameter array
     # [theta, stage move distance, camera pixel size]
@@ -166,7 +166,7 @@ def main(argv):
     # create BDV H5 file with sub-sampling for BigStitcher
     # TO DO: modify npy2bdv to support B3D compression, https://git.embl.de/balazs/B3D
     #        this may involve change the underlying hdf5 install that h5py is using
-    output_path = output_dir_path / 'deskewed_ch0.h5'
+    output_path = output_dir_path / 'deskewed_ch1111.h5'
     bdv_writer = npy2bdv.BdvWriter(str(output_path), nchannels=num_channels, ntiles=2*num_tiles+1, \
         subsamp=((1,1,1),(4,8,4),(8,16,8),),blockdim=((16, 32, 16),))
 
@@ -175,8 +175,10 @@ def main(argv):
     for sub_dir in sub_dirs:
 
         # determine the channel this directory corresponds to
-        m = re.search('ch(\d+)', str(sub_dir), re.IGNORECASE)
-        channel_id = int(m.group(1))
+        #m = re.search('ch(\d+)', str(sub_dir), re.IGNORECASE)
+        #channel_id = int(m.group(1))
+        #print('ch', channel_id)
+        channel_id = 0
 
         if channel_id == 0:
 

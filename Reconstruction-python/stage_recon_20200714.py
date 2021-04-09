@@ -112,8 +112,8 @@ def stage_deskew(data,parameters):
 def main(argv):
 
     # parse directory name from command line argument 
-    input_dir_string = ''
-    output_dir_string = ''
+    input_dir_string = 'Y:/lightsheet stuff/20210406 Deskew of dot pattern_argolight/'
+    output_dir_string = 'Y:/lightsheet stuff/20210406 Deskew of dot pattern_argolight/'
 
     try:
         arguments, values = getopt.getopt(argv,"hi:o:n:c:",["help","ipath=","opath="])
@@ -166,7 +166,7 @@ def main(argv):
     # create BDV H5 file with sub-sampling for BigStitcher
     # TO DO: modify npy2bdv to support B3D compression, https://git.embl.de/balazs/B3D
     #        this may involve change the underlying hdf5 install that h5py is using
-    output_path = output_dir_path / 'deskewed_20200713.h5'
+    output_path = output_dir_path / 'deskewed_202000001.h5'
     bdv_writer = npy2bdv.BdvWriter(str(output_path), nchannels=num_channels, ntiles=4*num_tiles, \
         subsamp=((1,1,1),(2,2,2),(4,4,4),(8,8,8),),blockdim=((16, 16, 16),))
     

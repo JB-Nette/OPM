@@ -18,6 +18,7 @@ import sys
 import getopt
 import re
 import skimage.io as io
+
 from skimage.measure import block_reduce
 import time
 from numba import njit, prange
@@ -31,19 +32,22 @@ def stage_deskew(data,parameters):
     theta = parameters[0]             # (degrees)
     distance = parameters[1]          # (nm)
     pixel_size = parameters[2]        # (nm)
-    [num_images,ny,nx]=data.shape  # (pixels)
-
+    [num_images,ny,nx] = data.shape  # (pixels)
+    print(data.shape)
 
     # change step size from physical space (nm) to camera space (pixels)
     pixel_step = distance/pixel_size    # (pixels)
-
+    print("pixel_step", pixel_step)
     # calculate the number of pixels scanned during stage scan 
     scan_end = num_images * pixel_step  # (pixels)
-
+    print("scan end", scan_end)
     # calculate properties for final image
     final_ny = np.int64(np.ceil(scan_end+ny*np.cos(theta*np.pi/180))) # (pixels)
     final_nz = np.int64(np.ceil(ny*np.sin(theta*np.pi/180)))          # (pixels)
     final_nx = np.int64(nx)                                           # (pixels)
+    print("final_ny ",final_ny)
+    print("final_nx ", final_nx)
+    print("final_nz ", final_nz)
 
     # create final image
     output = np.zeros((final_nz, final_ny, final_nx),dtype=np.float32)  # (pixels,pixels,pixels - data is float32)
@@ -103,8 +107,6 @@ def stage_deskew(data,parameters):
                                     l_before * (1-dz_after) * data[plane_after,pos_after,:] + \
                                     l_after * dz_before * data[plane_before,pos_before+1,:] + \
                                     l_after * (1-dz_before) * data[plane_before,pos_before,:]) /pixel_step
-
-
     # return output
     return output
 
@@ -112,8 +114,8 @@ def stage_deskew(data,parameters):
 def main(argv):
 
     # parse directory name from command line argument 
-    input_dir_string = ''
-    output_dir_string = ''
+    input_dir_string = 'Y:/lightsheet stuff/20210406 Deskew of dot pattern_argolight'
+    output_dir_string = 'Y:/lightsheet stuff/20210406 Deskew of dot pattern_argolight'
 
     try:
         arguments, values = getopt.getopt(argv,"hi:o:n:c:",["help","ipath=","opath="])
@@ -145,12 +147,14 @@ def main(argv):
 
     # TO DO: automatically determine number of channels and tile positions
     num_channels=1
-    num_tiles=1
+    num_tiles=2
+    # one folder is 1 tile of y scan -> ch0_y0, ch0_y1
 
     # create parameter array
     # [theta, stage move distance, camera pixel size]
+    # distance:step distance
     # units are [degrees,nm,nm]
-    params=np.array([60,250,115],dtype=np.float32)
+    params=np.array([29,200,122],dtype=np.float32)
 
     # check if user provided output path
     if (output_dir_string==''):
@@ -160,9 +164,9 @@ def main(argv):
 
     # https://github.com/nvladimus/npy2bdv
     # create BDV H5 file with sub-sampling for BigStitcher
-    output_path = output_dir_path / 'deskewed_ch0.h5'
-    bdv_writer = npy2bdv.BdvWriter(str(output_path), nchannels=num_channels, ntiles=num_tiles, \
-        subsamp=((1,1,1),(4,4,4),(8,8,8),),blockdim=((16, 16, 16),))
+    #output_path = output_dir_path / 'deskewed_10002.h5'
+    #bdv_writer = npy2bdv.BdvWriter(str(output_path), nchannels=num_channels, ntiles=num_tiles,
+        #subsamp=((1,1,1),),blockdim=((4, 256, 256),))
 
     # loop over each directory. Each directory will be placed as a "tile" into the BigStitcher file
     for sub_dir in sub_dirs:
@@ -183,33 +187,73 @@ def main(argv):
             # find all individual tif files in the current channel + tile sub directory and sort 
             files = natsorted(sub_dir.glob('*.tif'), alg=ns.PATH)
             #files.reverse()
-
+            stack = np.asarray([io.imread(str(file)) for file in files], dtype=np.float32)
             print('Deskew data.')
             # read in data
-            stack = np.asarray([io.imread(file) for file in files], dtype=np.float32)
+            if len(files) == 1:
+                stack = stack[0,:,:,:]
+
+            deskewed = JB_before_deskew(subdir=sub_dir, data_in_folder=stack, parameters=params)
 
             # run deskew
-            deskewed = stage_deskew(data=stack,parameters=params)
-            del stack
+            #file = 'Y:/lightsheet stuff/20210406 Deskew of dot pattern_argolight/ch0_y0/ch0_y1.tif'
+            #stack = np.asarray(io.imread(file), dtype=np.float32)
+            #deskewed = stage_deskew(data=stack,parameters=params)
 
+            del stack
+            print("lisa")
             print('Writing deskewed data.')
             # write BDV tile
-            # https://github.com/nvladimus/npy2bdv 
-            bdv_writer.append_view(deskewed, time=0, channel=channel_id, tile=tile_id, \
-                voxel_size_xyz=(params[2]/1000,params[2]*np.cos(params[0]*(np.pi/180.))/1000,params[1]*np.sin(params[0]*(np.pi/180.))/1000), voxel_units='um')
+            # https://github.com/nvladimus/npy2bdv
+            print("lisa tile", tile_id)
+            print("lisa channel", channel_id)
 
+
+def JB_before_deskew(subdir, data_in_folder, parameters):
+    #check if we have more than 1 tiff file in 1 folder
+    num_tiff_in_dir = len(natsorted(subdir.glob('*.tif'), alg=ns.PATH))
+    print("wtf", num_tiff_in_dir)
+    params = parameters
+    num_channels =1
+    num_tiles = 1
+    channel_id = 0
+    tile_id = 0
+    output_dir_string = 'Y:/lightsheet stuff/20210406 Deskew of dot pattern_argolight'
+    output_dir_path = Path(output_dir_string)
+    output_path = output_dir_path / 'deskewed_100000.h5'
+    bdv_writer = npy2bdv.BdvWriter(str(output_path), nchannels=num_channels, ntiles=num_tiles,
+                                   subsamp=((1, 1, 1),), blockdim=((4, 256, 256),))
+    print(num_tiff_in_dir)
+    if num_tiff_in_dir > 1:
+        [num_tiff, num_image, nx, ny] = data_in_folder.shape
+        for data in data_in_folder:
+            deskewed = stage_deskew(data, parameters)
+            bdv_writer.append_view(deskewed, time=0, channel=channel_id, tile=tile_id,
+                                   voxel_size_xyz=(params[2] / 1000, params[2] * np.cos(params[0] * (np.pi / 180.)) / 1000,
+                                   params[1] * np.sin(params[0] * (np.pi / 180.)) / 1000), voxel_units='um')
             # free up memory
             del deskewed
             gc.collect()
 
-    # write BDV xml file
-    # https://github.com/nvladimus/npy2bdv
+            # write BDV xml file
+            # https://github.com/nvladimus/npy2bdv
+        bdv_writer.write_xml_file(ntimes=1)
+        bdv_writer.close()
+
+        # clean up memory
+        gc.collect()
+    if num_tiff_in_dir == 1:
+        deskewed = stage_deskew(data_in_folder, parameters)
+        bdv_writer.append_view(deskewed, time=0, channel=channel_id, tile=tile_id,  voxel_size_xyz=(params[2] / 1000, params[2] * np.cos(params[0] * (np.pi / 180.)) / 1000,
+                                   params[1] * np.sin(params[0] * (np.pi / 180.)) / 1000), voxel_units='um')
+        # free up memory
+        del deskewed
+        gc.collect()
+
+        # write BDV xml file
+        # https://github.com/nvladimus/npy2bdv
     bdv_writer.write_xml_file(ntimes=1)
     bdv_writer.close()
-
-    # clean up memory
-    gc.collect()
-
 
 # run
 if __name__ == "__main__":
@@ -237,3 +281,4 @@ if __name__ == "__main__":
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
+

@@ -168,7 +168,7 @@ def main(argv):
     #        this may involve change the underlying hdf5 install that h5py is using
     output_path = output_dir_path / 'deskewed_ch1.h5'
     bdv_writer = npy2bdv.BdvWriter(str(output_path), nchannels=num_channels, ntiles=2*num_tiles+1, \
-        subsamp=((1,1,1),(4,8,4),(8,16,8),),blockdim=((16, 32, 16),))
+        subsamp=((4,4,4),),blockdim=((1, 16, 16),))
 
     # loop over each directory. Each directory will be placed as a "tile" into the BigStitcher file
     # TO DO: implement directory polling to do this in the background while data is being acquired.

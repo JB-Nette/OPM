@@ -112,8 +112,8 @@ def stage_deskew(data,parameters):
 def main(argv):
 
     # parse directory name from command line argument 
-    input_dir_string = ''
-    output_dir_string = ''
+    input_dir_string = 'Y:/lightsheet stuff/20210406 Deskew of dot pattern_argolight/'
+    output_dir_string = 'Y:/lightsheet stuff/20210406 Deskew of dot pattern_argolight/'
 
     try:
         arguments, values = getopt.getopt(argv,"hi:o:n:c:",["help","ipath=","opath="])
