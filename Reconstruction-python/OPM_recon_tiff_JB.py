@@ -120,7 +120,7 @@ def stage_deskew(data, parameters):
 def main(argv):
     # parse directory name from command line argument
     input_dir_string = 'Y:/lightsheet stuff/20210406 Deskew of dot pattern_argolight'
-    output_dir_string = 'Y:/lightsheet stuff/20210406 Deskew of dot pattern_argolight'
+    output_dir_string = 'Y:/lightsheet stuff/20210406 Deskew of dot pattern_argolight/Deskewy'
 
     try:
         arguments, values = getopt.getopt(argv, "hi:o:n:c:", ["help", "ipath=", "opath="])
@@ -193,12 +193,14 @@ def main(argv):
 def JB_before_deskew(sub_dir, parameters, output_dir):
 
     files = natsorted(sub_dir.glob('*.tif'), alg=ns.PATH)
+    print(sub_dir)
     print('Deskewing data...')
-
+    print('files', files)
     if len(files) == 1:
+        stack = np.asarray(io.imread((files)), dtype=np.float32)
         stack = stack[0, :, :, :]
         deskewed = stage_deskew(stack, parameters)
-        write_tiff(output_path = output_dir, filename=file_str[-1], deskewed=deskewed)
+        write_tiff(output_path = output_dir, filename=str(xxx), deskewed=deskewed)
 
         #free up memmory
         del deskewed
