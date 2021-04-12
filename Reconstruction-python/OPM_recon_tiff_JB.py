@@ -28,7 +28,7 @@ from numba import njit, prange
 
 def write_tiff(output_path, filename, deskewed):
     print('Save deskewed data', output_path + '/' + filename)
-    return imsave(output_path + '/' + filename, deskewed)
+    return imsave(output_path + '/' + filename + '.tiff', deskewed)
 
 # perform OPM reconstruction using orthogonal interpolation
 # http://numba.pydata.org/numba-doc/latest/user/parallel.html#numba-parallel
@@ -119,8 +119,8 @@ def stage_deskew(data, parameters):
 # parse experimental directory, load data, perform orthogonal deskew, and save as BDV H5 file
 def main(argv):
     # parse directory name from command line argument
-    input_dir_string = 'Y:/lightsheet stuff/20210406 Deskew of dot pattern_argolight'
-    output_dir_string = 'Y:/lightsheet stuff/20210406 Deskew of dot pattern_argolight/Deskewy'
+    input_dir_string = 'C:/Users/Nette/Desktop/GIS/lightsheet/Deskew image'
+    output_dir_string = 'C:/Users/Nette/Desktop/GIS/lightsheet/Deskew image'
 
     try:
         arguments, values = getopt.getopt(argv, "hi:o:n:c:", ["help", "ipath=", "opath="])
@@ -150,12 +150,6 @@ def main(argv):
     sub_dirs = [x for x in input_dir_path.iterdir() if x.is_dir()]
     sub_dirs = natsorted(sub_dirs, alg=ns.PATH)
 
-    # TO DO: automatically determine number of channels and tile positions
-    # I think we don't need this one because we are not saving in .Hdf5 file
-    # num_channels = 1
-    # num_tiles = 2
-    # one folder is 1 tile of y scan -> ch0_y0, ch0_y1
-
     # create parameter array
     # [theta, stage move distance, camera pixel size]
     # distance: step distance -JB
@@ -168,13 +162,6 @@ def main(argv):
     else:
         output_dir_path = Path(output_dir_string)
 
-    # https://github.com/nvladimus/npy2bdv
-    # create BDV H5 file with sub-sampling for BigStitcher
-    # output_path = output_dir_path / 'deskewed_10002.h5'
-    # bdv_writer = npy2bdv.BdvWriter(str(output_path), nchannels=num_channels, ntiles=num_tiles,
-    # subsamp=((1,1,1),),blockdim=((4, 256, 256),))
-    # I dont' think we need this too -JB
-
     # I made a huge modification from this part -JB
     # We need to know the number of channels and z position and y position because the total number of sub folders relate to channel*z_num*y_num -JB
     # We can do it as user input or auto by changing the folder name (like what we do in Confocal system) - JB
@@ -182,45 +169,28 @@ def main(argv):
 
     for sub_dir in sub_dirs:
 
-        print("Now processing ", str(sub_dir))
+        print("Now processing ", sub_dir)
 
         # find all individual tif files in the current channel + tile sub directory and sort + deskew each file in sub directory
-        JB_before_deskew(sub_dir=sub_dir, parameters=params, output_dir=output_dir_string)
+        JB_before_deskew(sub_dir= sub_dir, parameters=params, output_dir=output_dir_string)
 
 
 
 
 def JB_before_deskew(sub_dir, parameters, output_dir):
-
     files = natsorted(sub_dir.glob('*.tif'), alg=ns.PATH)
-    print(sub_dir)
     print('Deskewing data...')
-    print('files', files)
-    if len(files) == 1:
-        stack = np.asarray(io.imread((files)), dtype=np.float32)
-        stack = stack[0, :, :, :]
-        deskewed = stage_deskew(stack, parameters)
-        write_tiff(output_path = output_dir, filename=str(xxx), deskewed=deskewed)
 
-        #free up memmory
+    for file in files:
+        stack = np.asarray(io.imread(str(file)), dtype=np.float32)
+        [num_image, nx, ny] = stack.shape
+        print("AAAA", num_image, nx, ny)
+        deskewed = stage_deskew(stack, parameters)
+        file_str = str(file).split("\\")
+        write_tiff(output_path = output_dir, filename=file_str[-1], deskewed=deskewed)
+
         del deskewed
         gc.collect()
-
-
-    # check if we have more than 1 tiff file in 1 folder
-    num_tiff_in_dir = len(files)
-    print("number of tiff file in sub directory", num_tiff_in_dir)
-
-    if num_tiff_in_dir > 1:
-         for file in files:
-            stack = np.asarray(io.imread(str(file)), dtype=np.float32)
-            [num_image, nx, ny] = stack.shape
-            deskewed = stage_deskew(stack, parameters)
-            file_str = str(file).split("\\")
-            write_tiff(output_path = output_dir, filename=file_str[-1], deskewed=deskewed)
-
-            del deskewed
-            gc.collect()
 
 # run
 if __name__ == "__main__":
