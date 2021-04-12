@@ -26,9 +26,35 @@ from skimage.measure import block_reduce
 import time
 from numba import njit, prange
 
+def JB_before_deskew(sub_dir, parameters, output_dir):
+    """
+
+    :param sub_dir (Path) :
+    """
+    files = natsorted(sub_dir.glob('*.tif'), alg=ns.PATH)
+    print('Deskewing data...')
+
+    for file in files:
+        stack = np.asarray(io.imread(str(file)), dtype=np.float32)
+        [num_image, nx, ny] = stack.shape
+        print("AAAA", num_image, nx, ny)
+        deskewed = stage_deskew(stack, parameters)
+        file_str = str(file).split("\\")
+        write_tiff(output_path = output_dir, filename=file_str[-1], deskewed=deskewed)
+
+        del deskewed
+        gc.collect()
+
+# write deskewed images in tiff file
 def write_tiff(output_path, filename, deskewed):
+    """"
+    write (deskewed) images as tiff files in output path.
+    :param output_path (String): saved data path
+    :param filename (String): file name
+    :param deskewed (3D array) : images/ deskewed image
+    """
     print('Save deskewed data', output_path + '/' + filename)
-    return imsave(output_path + '/' + filename + '.tiff', deskewed)
+    imsave(output_path + '/' + filename + '.tiff', deskewed)
 
 # perform OPM reconstruction using orthogonal interpolation
 # http://numba.pydata.org/numba-doc/latest/user/parallel.html#numba-parallel
@@ -175,22 +201,6 @@ def main(argv):
         JB_before_deskew(sub_dir= sub_dir, parameters=params, output_dir=output_dir_string)
 
 
-
-
-def JB_before_deskew(sub_dir, parameters, output_dir):
-    files = natsorted(sub_dir.glob('*.tif'), alg=ns.PATH)
-    print('Deskewing data...')
-
-    for file in files:
-        stack = np.asarray(io.imread(str(file)), dtype=np.float32)
-        [num_image, nx, ny] = stack.shape
-        print("AAAA", num_image, nx, ny)
-        deskewed = stage_deskew(stack, parameters)
-        file_str = str(file).split("\\")
-        write_tiff(output_path = output_dir, filename=file_str[-1], deskewed=deskewed)
-
-        del deskewed
-        gc.collect()
 
 # run
 if __name__ == "__main__":
