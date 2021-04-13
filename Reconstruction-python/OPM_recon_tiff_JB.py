@@ -26,7 +26,7 @@ from skimage.measure import block_reduce
 import time
 from numba import njit, prange
 
-def JB_before_deskew(sub_dir, parameters, output_dir):
+def Before_deskew(sub_dir, parameters, output_dir):
     """
     :param sub_dir (Path) : each sub folder containing the tile of y scan
     :param parameters (list) : list of theta, stage move distance, camera pixel size for deskew
@@ -209,7 +209,7 @@ def main(argv):
 
         print("Now processing ", sub_dir)
 
-        JB_before_deskew(sub_dir= sub_dir, parameters=params, output_dir=output_dir_string)
+        Before_deskew(sub_dir=sub_dir, parameters=params, output_dir=output_dir_string)
 
 # run
 if __name__ == "__main__":
