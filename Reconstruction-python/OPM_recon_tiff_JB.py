@@ -28,16 +28,15 @@ from numba import njit, prange
 
 def JB_before_deskew(sub_dir, parameters, output_dir):
     """
-
-    :param sub_dir (Path) :
+    :param sub_dir (Path) : each sub folder containing the tile of y scan
+    :param parameters (list) : list of theta, stage move distance, camera pixel size for deskew
+    :param output_dir (string) : output folder to save deskewed images
     """
     files = natsorted(sub_dir.glob('*.tif'), alg=ns.PATH)
     print('Deskewing data...')
 
     for file in files:
         stack = np.asarray(io.imread(str(file)), dtype=np.float32)
-        [num_image, nx, ny] = stack.shape
-        print("AAAA", num_image, nx, ny)
         deskewed = stage_deskew(stack, parameters)
         file_str = str(file).split("\\")
         write_tiff(output_path = output_dir, filename=file_str[-1], deskewed=deskewed)
@@ -49,8 +48,8 @@ def JB_before_deskew(sub_dir, parameters, output_dir):
 def write_tiff(output_path, filename, deskewed):
     """"
     write (deskewed) images as tiff files in output path.
-    :param output_path (String): saved data path
-    :param filename (String): file name
+    :param output_path (string): saved data path
+    :param filename (string): file name
     :param deskewed (3D array) : images/ deskewed image
     """
     print('Save deskewed data', output_path + '/' + filename)
@@ -60,6 +59,12 @@ def write_tiff(output_path, filename, deskewed):
 # http://numba.pydata.org/numba-doc/latest/user/parallel.html#numba-parallel
 @njit(parallel=True)
 def stage_deskew(data, parameters):
+    """"
+      Deskew the tilt images from lightsheet which scan in y direction
+      :param data (3D array) :  tiff image before deskew
+      :param parameters (list) : list of theta, stage move distance, camera pixel size for deskew
+      :return (3D array) : image after deskew
+    """
     # unwrap parameters
     theta = parameters[0]  # (degrees)
     distance = parameters[1]  # (nm)
@@ -144,6 +149,10 @@ def stage_deskew(data, parameters):
 
 # parse experimental directory, load data, perform orthogonal deskew, and save as BDV H5 file
 def main(argv):
+    """
+    : params: input_dir_string (string) :  folder contains subfolder of resulting tilted lightsheet images
+      params: output_dir_string (string) : folder to save deskewed images
+    """
     # parse directory name from command line argument
     input_dir_string = 'C:/Users/Nette/Desktop/GIS/lightsheet/Deskew image'
     output_dir_string = 'C:/Users/Nette/Desktop/GIS/lightsheet/Deskew image'
@@ -167,19 +176,24 @@ def main(argv):
         sys.exit(2)
 
     # Load data
-
     # https://docs.python.org/3/library/pathlib.html
     # Create Path object to directory
     input_dir_path = Path(input_dir_string)
 
-    # Parse directory for number of channels and strip positions then sort
+    """
+    Parse directory and sort sub folder in the directory
+    """
     sub_dirs = [x for x in input_dir_path.iterdir() if x.is_dir()]
     sub_dirs = natsorted(sub_dirs, alg=ns.PATH)
 
-    # create parameter array
-    # [theta, stage move distance, camera pixel size]
-    # distance: step distance -JB
-    # units are [degrees,nm,nm]
+    """
+    create parameter array
+    [theta, stage move distance, camera pixel size] : units = [degrees,nm,nm]
+    theta : lightsheet angle
+    stage move distance : distance of one step that stage move
+    camera pixel size : size at camera FOV
+    """
+
     params = np.array([29, 200, 122], dtype=np.float32)
 
     # check if user provided output path
@@ -188,19 +202,14 @@ def main(argv):
     else:
         output_dir_path = Path(output_dir_string)
 
-    # I made a huge modification from this part -JB
-    # We need to know the number of channels and z position and y position because the total number of sub folders relate to channel*z_num*y_num -JB
-    # We can do it as user input or auto by changing the folder name (like what we do in Confocal system) - JB
-    # loop over each directory. Each directory will be placed as a "tile" into the BigStitcher file
-
+    """
+    Loop over each tiff image in each sub directory in the main directory (input_dir) then deskew
+    """
     for sub_dir in sub_dirs:
 
         print("Now processing ", sub_dir)
 
-        # find all individual tif files in the current channel + tile sub directory and sort + deskew each file in sub directory
         JB_before_deskew(sub_dir= sub_dir, parameters=params, output_dir=output_dir_string)
-
-
 
 # run
 if __name__ == "__main__":
